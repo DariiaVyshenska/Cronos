@@ -1,5 +1,5 @@
 require 'sinatra'
-require "sinatra/reloader" if development?
+require 'sinatra/reloader' if development?
 require 'tilt/erubis'
 require 'sinatra/content_for'
 
@@ -42,11 +42,11 @@ helpers do
   end
 
   def all_done?(list)
-    todos_count_not_done(list) == 0 && !(todos_count(list).zero?)
+    todos_count_not_done(list).zero? && !todos_count(list).zero?
   end
 
   def list_class(list)
-    "complete" if all_done?(list)
+    'complete' if all_done?(list)
   end
 end
 
@@ -88,7 +88,7 @@ post '/lists' do
 end
 
 # Render a to-do list for a particular list
-get "/lists/:id" do
+get '/lists/:id' do
   @list_id = params[:id].to_i
   return 'NO SUCH LIST' unless (0...session[:lists].size).cover?(@list_id)
 
@@ -98,14 +98,14 @@ get "/lists/:id" do
 end
 
 # Edit an existing todo list
-get "/lists/:id/edit" do
+get '/lists/:id/edit' do
   list_id = params[:id].to_i
   @list = session[:lists][list_id]
   erb :edit_list, layout: :layout
 end
 
 # Update an existing todo list
-post "/lists/:id" do
+post '/lists/:id' do
   list_new_name = params[:list_new_name].strip if params[:list_new_name]
   list_id = params[:id].to_i
   @list = session[:lists][list_id]
@@ -121,14 +121,14 @@ post "/lists/:id" do
 end
 
 # Delete a todo list
-post "/lists/:id/destroy" do
+post '/lists/:id/destroy' do
   session[:lists].delete_at(params[:id].to_i)
   session[:success] = 'The list has been deleted.'
-  redirect "/lists"
+  redirect '/lists'
 end
 
 # Add a todo item to a list
-post "/lists/:list_id/todos" do
+post '/lists/:list_id/todos' do
   @list_id = params[:list_id].to_i
   @list = session[:lists][@list_id]
 
@@ -139,20 +139,18 @@ post "/lists/:list_id/todos" do
     session[:error] = error
     erb :list, layout: :layout
   else
-    @list[:todos] << { name: new_todo, completed: false}
+    @list[:todos] << { name: new_todo, completed: false }
     session[:success] = 'The todo was added.'
     redirect "lists/#{@list_id}"
   end
 end
 
 def error_for_todo(name)
-  if !(1..100).cover? name.size
-    'Todo must be between 1 and 100 characters.'
-  end
+  'Todo must be between 1 and 100 characters.' unless (1..100).cover? name.size
 end
 
 # Delete an item from the list
-post "/lists/:list_id/todos/:todo_id/destroy" do     # DONE!
+post '/lists/:list_id/todos/:todo_id/destroy' do     # DONE!
   list_id = params[:list_id].to_i
   list = session[:lists][list_id]
 
@@ -162,30 +160,22 @@ post "/lists/:list_id/todos/:todo_id/destroy" do     # DONE!
   redirect "/lists/#{list_id}"
 end
 
-post "/lists/:list_id/todos/:todo_id" do
+post '/lists/:list_id/todos/:todo_id' do
   list_id = params[:list_id].to_i
   list = session[:lists][list_id]
 
   todo_id = params[:todo_id].to_i
-  new_val = (params[:completed].to_s.downcase == "true" ? true : false)
+  new_val = (params[:completed].to_s.downcase == 'true')
   list[:todos][todo_id][:completed] = new_val
 
   session[:success] = 'The todo has been updated.'
   redirect "lists/#{list_id}"
 end
 
-post "/lists/:list_id/complete_all" do
+post '/lists/:list_id/complete_all' do
   list_id = params[:list_id].to_i
   list = session[:lists][list_id]
   list[:todos].each { |todo| todo[:completed] = true }
   session[:success] = 'All todos have been completed.'
   redirect "lists/#{list_id}"
 end
-
-# get "/error" do
-#   "I'm a get error page"
-# end
-#
-# post "/error" do
-#   "I'm a post error page"
-# end

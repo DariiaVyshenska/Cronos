@@ -6,6 +6,7 @@ require 'sinatra/content_for'
 configure do
   enable :sessions
   set :session_secret, 'secret'
+  set :erb, :escape_html => true
 end
 
 before do
@@ -50,6 +51,14 @@ helpers do
   end
 end
 
+def load_list(list_id)
+  list = session[:lists][list_id] if list_id && session[:lists][list_id]
+  return list if list
+
+  session[:error] = "The specified list was not found."
+  redirect "/lists"
+end
+
 get '/' do
   redirect '/lists'
 end
@@ -90,9 +99,8 @@ end
 # Render a to-do list for a particular list
 get '/lists/:id' do
   @list_id = params[:id].to_i
-  return 'NO SUCH LIST' unless (0...session[:lists].size).cover?(@list_id)
 
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   @list_todos = session[:lists][@list_id][:todos]
   erb :list, layout: :layout
 end
@@ -100,7 +108,7 @@ end
 # Edit an existing todo list
 get '/lists/:id/edit' do
   list_id = params[:id].to_i
-  @list = session[:lists][list_id]
+  @list = load_list(list_id)
   erb :edit_list, layout: :layout
 end
 
@@ -108,7 +116,7 @@ end
 post '/lists/:id' do
   list_new_name = params[:list_new_name].strip if params[:list_new_name]
   list_id = params[:id].to_i
-  @list = session[:lists][list_id]
+  @list = load_list(list_id)
 
   if (error = error_for_list_name(list_new_name))
     session[:error] = error
@@ -130,7 +138,7 @@ end
 # Add a todo item to a list
 post '/lists/:list_id/todos' do
   @list_id = params[:list_id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
 
   @list_todos = @list[:todos]
   new_todo = params[:todo].strip
@@ -152,7 +160,7 @@ end
 # Delete an item from the list
 post '/lists/:list_id/todos/:todo_id/destroy' do     # DONE!
   list_id = params[:list_id].to_i
-  list = session[:lists][list_id]
+  list = load_list(list_id)
 
   todo_id = params[:todo_id].to_i
   list[:todos].delete_at(todo_id)
@@ -162,7 +170,7 @@ end
 
 post '/lists/:list_id/todos/:todo_id' do
   list_id = params[:list_id].to_i
-  list = session[:lists][list_id]
+  list = load_list(list_id)
 
   todo_id = params[:todo_id].to_i
   new_val = (params[:completed].to_s.downcase == 'true')
@@ -174,7 +182,7 @@ end
 
 post '/lists/:list_id/complete_all' do
   list_id = params[:list_id].to_i
-  list = session[:lists][list_id]
+  list = load_list(list_id)
   list[:todos].each { |todo| todo[:completed] = true }
   session[:success] = 'All todos have been completed.'
   redirect "lists/#{list_id}"

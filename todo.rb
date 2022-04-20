@@ -1,7 +1,8 @@
 require 'sinatra'
-require 'sinatra/reloader' if development?
 require 'tilt/erubis'
 require 'sinatra/content_for'
+
+require_relative "database_persistence.rb"
 
 configure do
   enable :sessions
@@ -9,8 +10,13 @@ configure do
   set :erb, :escape_html => true
 end
 
+configure(:development) do
+  require 'sinatra/reloader'
+  also_reload "database_persistence.rb"
+end
+
 before do
-  session[:lists] ||= []
+  @storage = DatabasePersistance.new(logger)
 end
 
 helpers do
@@ -49,13 +55,8 @@ helpers do
   end
 end
 
-def next_element_id(elements)
-  max = elements.map { |element| element[:id] }.max || 0
-  max + 1
-end
-
 def load_list(list_id)
-  list = session[:lists].find { |el| el[:id] == list_id }
+  list = @storage.find_list(list_id)
   return list if list
 
   session[:error] = 'The specified list was not found.'
@@ -68,7 +69,7 @@ end
 
 # View list of lists
 get '/lists' do
-  @lists = session[:lists]
+  @lists = @storage.all_lists
   erb :lists, layout: :layout
 end
 
@@ -81,7 +82,7 @@ end
 def error_for_list_name(name)
   if !(1..100).cover? name.size
     'List name must be between 1 and 100 characters.'
-  elsif session[:lists].any? { |list| list[:name] == name }
+  elsif @storage.all_lists.any? { |list| list[:name] == name }
     'List name must be unique.'
   end
 end
@@ -93,8 +94,7 @@ post '/lists' do
     session[:error] = error
     erb :new_list, layout: :layout
   else
-    list_id = next_element_id(session[:lists])
-    session[:lists] << { id: list_id, name: list_name, todos: [] }
+    @storage.create_new_list(list_name)
     session[:success] = 'The list has been created.'
     redirect '/lists'
   end
@@ -126,7 +126,8 @@ post '/lists/:id' do
     session[:error] = error
     erb :edit_list, layout: :layout
   else
-    @list[:name] = params[:list_new_name].strip
+    list_new_name = params[:list_new_name].strip
+    @storage.update_list_name(list_id, list_new_name)
     session[:success] = 'The list has been modified.'
     redirect "/lists/#{list_id}"
   end
@@ -135,12 +136,12 @@ end
 # Delete a todo list
 post '/lists/:id/destroy' do
   list_id = params[:id].to_i
-  session[:lists].reject! { |list| list[:id] == list_id }
+  @storage.delete_list(list_id)
 
+  session[:success] = 'The list has been deleted.'
   if env['HTTP_X_REQUESTED_WITH'] == 'XMLHttpRequest'
     '/lists'
   else
-    session[:success] = 'The list has been deleted.'
     redirect '/lists'
   end
 end
@@ -157,8 +158,7 @@ post '/lists/:list_id/todos' do
     session[:error] = error
     erb :list, layout: :layout
   else
-    id = next_element_id(@list[:todos])
-    @list[:todos] << { id: id, name: new_todo, completed: false }
+    @storage.create_new_todo(@list_id, new_todo)
 
     session[:success] = 'The todo was added.'
     redirect "lists/#{@list_id}"
@@ -171,12 +171,10 @@ end
 
 # Delete an item from the list
 post '/lists/:list_id/todos/:todo_id/destroy' do
-  list_id = params[:list_id].to_i
-  list = load_list(list_id)
-
+  @list_id = params[:list_id].to_i
   todo_id = params[:todo_id].to_i
-  list[:todos].reject! { |todo| todo[:id] == todo_id }
 
+  @storage.delete_todo_from_list(@list_id, todo_id)
   if env['HTTP_X_REQUESTED_WITH'] == 'XMLHttpRequest'
     status 204
   else
@@ -185,15 +183,14 @@ post '/lists/:list_id/todos/:todo_id/destroy' do
   end
 end
 
+
 # Update the status of a todo
 post '/lists/:list_id/todos/:todo_id' do
   list_id = params[:list_id].to_i
-  list = load_list(list_id)
-
   todo_id = params[:todo_id].to_i
   new_val = (params[:completed].to_s.downcase == 'true')
-  todo = list[:todos].find { |el| el[:id] == todo_id }
-  todo[:completed] = new_val
+
+  @storage.update_todo_status(list_id, todo_id, new_val)
 
   session[:success] = 'The todo has been updated.'
   redirect "lists/#{list_id}"
@@ -201,8 +198,8 @@ end
 
 post '/lists/:list_id/complete_all' do
   list_id = params[:list_id].to_i
-  list = load_list(list_id)
-  list[:todos].each { |todo| todo[:completed] = true }
+  @storage.mark_all_todos_as_completed(list_id)
+
   session[:success] = 'All todos have been completed.'
   redirect "lists/#{list_id}"
 end

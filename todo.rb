@@ -1,18 +1,20 @@
+# frozen_string_literal: true
+
 require 'sinatra'
 require 'tilt/erubis'
 require 'sinatra/content_for'
 
-require_relative "database_persistence.rb"
+require_relative 'database_persistence'
 
 configure do
   enable :sessions
   set :session_secret, 'secret'
-  set :erb, :escape_html => true
+  set :erb, escape_html: true
 end
 
 configure(:development) do
   require 'sinatra/reloader'
-  also_reload "database_persistence.rb"
+  also_reload 'database_persistence.rb'
 end
 
 before do
@@ -179,14 +181,13 @@ post '/lists/:list_id/todos/:todo_id/destroy' do
   todo_id = params[:todo_id].to_i
 
   @storage.delete_todo_from_list(@list_id, todo_id)
+  session[:success] = 'The todo has been deleted.'
   if env['HTTP_X_REQUESTED_WITH'] == 'XMLHttpRequest'
-    status 204
+    "/lists/#{@list_id}"
   else
-    session[:success] = 'The todo has been deleted.'
     redirect "/lists/#{@list_id}"
   end
 end
-
 
 # Update the status of a todo
 post '/lists/:list_id/todos/:todo_id' do

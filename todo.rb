@@ -40,20 +40,8 @@ helpers do
     complete_todos.each(&block)
   end
 
-  def todos_count(list)
-    list[:todos].size
-  end
-
-  def todos_count_done(list)
-    list[:todos].select { |todo| todo[:completed] }.size
-  end
-
-  def todos_count_not_done(list)
-    todos_count(list) - todos_count_done(list)
-  end
-
   def all_done?(list)
-    todos_count_not_done(list).zero? && !todos_count(list).zero?
+    (list[:todos_count]).positive? && (list[:todos_remaining_count]).zero?
   end
 
   def list_class(list)
@@ -111,7 +99,7 @@ get '/lists/:id' do
   @list_id = params[:id].to_i
 
   @list = load_list(@list_id)
-  @list_todos = @list[:todos]
+  @list_todos = @storage.find_todos_for_list(@list_id)
   erb :list, layout: :layout
 end
 
@@ -157,7 +145,7 @@ post '/lists/:list_id/todos' do
   @list_id = params[:list_id].to_i
   @list = load_list(@list_id)
 
-  @list_todos = @list[:todos]
+  @list_todos = @storage.find_todos_for_list(@list_id)
   new_todo = params[:todo].strip
 
   if (error = error_for_todo(new_todo))
